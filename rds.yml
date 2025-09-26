@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: RDS PostgreSQL instance in private subnets, accessible only from ECS service security group
+
+Parameters:
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.micro
+  DBAllocatedStorage:
+    Type: Number
+    Default: 20
+
+Resources:
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds: !Split [ ',', !ImportValue networking-stack-PrivateSubnetIds ]
+      DBSubnetGroupName: !Sub ${AWS::StackName}-subnet-group
+
+  RdsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS security group (allow access only from ECS tasks SG)
+      VpcId: !ImportValue networking-stack-VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !ImportValue networking-stack-ServiceSecurityGroupId
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-RdsSG
+
+  PostgresInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub ${AWS::StackName}-postgres
+      Engine: postgres
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: !Ref DBAllocatedStorage
+      StorageType: gp2
+      PubliclyAccessible: false
+      MultiAZ: false
+      # Here we inject ImportValue into Sub with variable substitution
+      MasterUsername:
+        Fn::Sub:
+          - "{{resolve:secretsmanager:${SecretArn}:SecretString:username}}"
+          - { SecretArn: !ImportValue secrets-s3-stack-SecretArn }
+      MasterUserPassword:
+        Fn::Sub:
+          - "{{resolve:secretsmanager:${SecretArn}:SecretString:password}}"
+          - { SecretArn: !ImportValue secrets-s3-stack-SecretArn }
+      VPCSecurityGroups:
+        - !Ref RdsSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Postgres
+
+Outputs:
+  DBEndpointAddress:
+    Value: !GetAtt PostgresInstance.Endpoint.Address
+    Export:
+      Name: !Sub ${AWS::StackName}-DBEndpointAddress
+
+  DBEndpointPort:
+    Value: !GetAtt PostgresInstance.Endpoint.Port
+    Export:
+      Name: !Sub ${AWS::StackName}-DBEndpointPort
