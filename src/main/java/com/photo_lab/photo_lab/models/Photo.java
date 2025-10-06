@@ -20,7 +20,6 @@ public class Photo {
     @Column(nullable = false, updatable = false)
     private Instant uploadedAt = Instant.now();
 
-    // --- Constructors ---
     public Photo() {}
 
     public Photo(String s3Key, String description) {
@@ -29,7 +28,6 @@ public class Photo {
         this.uploadedAt = Instant.now();
     }
 
-    // --- Getters & Setters ---
     public Long getId() {
         return id;
     }
@@ -62,7 +60,6 @@ public class Photo {
         this.uploadedAt = uploadedAt;
     }
 
-    // --- Debugging Helper ---
     @Override
     public String toString() {
         return "Photo{" +
